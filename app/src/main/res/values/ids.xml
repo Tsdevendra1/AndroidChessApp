@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="COL_NUM" />
+    <item type="id" name="ROW_NUM" />
+    <item name="tableGrid" type="id"/>
+</resources>
