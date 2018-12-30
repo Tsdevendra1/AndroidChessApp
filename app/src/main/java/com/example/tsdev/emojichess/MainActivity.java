@@ -1,10 +1,12 @@
 package com.example.tsdev.emojichess;
 
 import android.content.ClipData;
+import android.content.Context;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.icu.util.ChineseCalendar;
+import android.provider.ContactsContract;
 import android.support.constraint.ConstraintSet;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -18,7 +20,9 @@ import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -32,6 +36,10 @@ public class MainActivity extends AppCompatActivity {
     private int BISHOP_TYPE = 5;
     private int WHITE_PIECE = 0;
     private int BLACK_PIECE = 1;
+    // Forward counts as moving to a tile with which has a greater row number than the current one
+    private int MOVING_FORWARD = 0;
+    // Backward counts as moving to a tile with which has a lower row number than the current one
+    private int MOVING_BACKWARD = 1;
 
 
     @Override
@@ -170,8 +178,10 @@ public class MainActivity extends AppCompatActivity {
                 childView.setOnTouchListener(new MyTouchListener());
                 if (r == 0 || r == 1) {
                     childView.setTag(R.id.PIECE_COLOUR, BLACK_PIECE);
+                    childView.setTag(R.id.MOVEMENT_DIRECTION, MOVING_FORWARD);
                 } else {
                     childView.setTag(R.id.PIECE_COLOUR, WHITE_PIECE);
+                    childView.setTag(R.id.MOVEMENT_DIRECTION, MOVING_BACKWARD);
                     // See piece colour to white
                     childView.setColorFilter(childView.getContext().getResources().getColor(R.color.white), PorterDuff.Mode.SRC_ATOP);
                 }
@@ -207,14 +217,72 @@ public class MainActivity extends AppCompatActivity {
                 R.drawable.shape_droptarget);
         Drawable normalShape = getResources().getDrawable(R.drawable.shape_brown);
 
+        boolean checkLegalMove(View piece, View tile) {
+
+            // Piece info
+            int pieceType = (int) piece.getTag(R.id.PIECE_TYPE);
+            int currentPieceRow = (int) piece.getTag(R.id.PIECE_ROW_POSITION);
+            int currentPieceCol = (int) piece.getTag(R.id.PIECE_COL_POSITION);
+            int pieceColor = (int) piece.getTag(R.id.PIECE_COLOUR);
+            int pieceMovementDirection = (int) piece.getTag(R.id.MOVEMENT_DIRECTION);
+
+            // Tile info
+            int currentTileRow = (int) tile.getTag(R.id.ROW_NUM);
+            int currentTileCol = (int) tile.getTag(R.id.COL_NUM);
+            boolean legalMove = false;
+
+            if (pieceType == PAWN_TYPE) {
+                if (pieceMovementDirection == MOVING_BACKWARD) {
+                    legalMove = ((currentTileRow <= currentPieceRow && currentTileRow >= currentPieceRow - 2) && currentPieceCol == currentTileCol);
+                } else {
+                    legalMove = currentTileRow >= currentPieceRow && currentTileRow <= currentPieceRow - 2;
+                }
+            } else if (pieceType == BISHOP_TYPE) {
+                if (currentPieceCol != currentTileCol) {
+                    legalMove = (currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
+                }
+            } else if (pieceType == KING_TYPE) {
+                legalMove = ((currentPieceRow - 1 <= currentTileRow && currentTileRow <= currentPieceRow + 1) && (currentPieceCol - 1 <= currentTileCol && currentTileCol <= currentPieceCol + 1));
+
+            } else if (pieceType == QUEEN_TYPE) {
+                if (currentTileCol != currentPieceCol) {
+                    legalMove = (currentTileRow == currentPieceRow ||currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
+                } else if (currentTileRow != currentPieceRow) {
+                    legalMove = (currentPieceCol == currentTileCol ||currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
+                }
+            } else if (pieceType == ROOK_TYPE) {
+                if (currentTileCol != currentPieceCol) {
+                    legalMove = (currentTileRow == currentPieceRow);
+                }
+                if (currentPieceRow != currentTileRow) {
+                    legalMove = (currentPieceCol == currentTileCol);
+                }
+            } else if (pieceType == KNIGHT_TYPE) {
+                if (currentTileRow != currentPieceRow) {
+                    int absDiffRow = Math.abs(currentPieceRow - currentTileRow);
+                    if (absDiffRow == 1) {
+                        legalMove = (Math.abs(currentPieceCol - currentTileCol) == 2);
+                    } else if (absDiffRow == 2) {
+                        legalMove = (Math.abs(currentPieceCol - currentTileCol) == 1);
+                    }
+                }
+            }
+            // Update piece position
+            if (legalMove) {
+                piece.setTag(R.id.PIECE_ROW_POSITION, currentTileRow);
+                piece.setTag(R.id.PIECE_COL_POSITION, currentTileCol);
+            }
+            System.out.println(piece.getTag(R.id.PIECE_COL_POSITION));
+            System.out.println(piece.getTag(R.id.PIECE_ROW_POSITION));
+            return legalMove;
+        }
+
         @Override
         public boolean onDrag(View v, DragEvent event) {
             switch (event.getAction()) {
                 case DragEvent.ACTION_DRAG_STARTED:
                     break;
                 case DragEvent.ACTION_DRAG_ENTERED:
-                    System.out.println(v.getTag(R.id.ROW_NUM));
-                    System.out.println(v.getTag(R.id.COL_NUM));
                     break;
                 case DragEvent.ACTION_DRAG_EXITED:
                     break;
@@ -222,11 +290,14 @@ public class MainActivity extends AppCompatActivity {
                     ViewGroup currentViewGroup = (ViewGroup) v;
                     int numChildren = currentViewGroup.getChildCount();
 
+
                     // This is the view being dragged
                     View view = (View) event.getLocalState();
 
+                    boolean legalMove = checkLegalMove(view, v);
+
                     // Shouldn't have any other children in the view it is being dropped into
-                    if (numChildren == 0) {
+                    if (numChildren == 0 && legalMove) {
 
                         // Need to get the parent of the view so we can remove it from that position
                         ViewGroup owner = (ViewGroup) view.getParent();
@@ -238,6 +309,12 @@ public class MainActivity extends AppCompatActivity {
                         view.setVisibility(View.VISIBLE);
                     } else {
                         view.setVisibility(View.VISIBLE);
+                        Context context = getApplicationContext();
+                        String text = "Illegal Move";
+                        int duration = Toast.LENGTH_SHORT;
+
+                        Toast toast = Toast.makeText(context, text, duration);
+                        toast.show();
                     }
                     break;
                 case DragEvent.ACTION_DRAG_ENDED:
