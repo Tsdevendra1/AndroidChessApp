@@ -1,7 +1,10 @@
 package com.example.tsdev.emojichess;
 
 import android.content.ClipData;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
+import android.icu.util.ChineseCalendar;
 import android.support.constraint.ConstraintSet;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -21,6 +24,14 @@ import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
     private ScreenInfoHolder screenInfoHolder;
+    private int PAWN_TYPE = 0;
+    private int ROOK_TYPE = 1;
+    private int QUEEN_TYPE = 2;
+    private int KING_TYPE = 3;
+    private int KNIGHT_TYPE = 4;
+    private int BISHOP_TYPE = 5;
+    private int WHITE_PIECE = 0;
+    private int BLACK_PIECE = 1;
 
 
     @Override
@@ -33,11 +44,13 @@ public class MainActivity extends AppCompatActivity {
 
         createGridStructure(screenInfoHolder);
     }
+
     public class ScreenInfoHolder {
-        ScreenInfoHolder(int width, int height){
+        ScreenInfoHolder(int width, int height) {
             this.setScreenHeight(height);
             this.setScreenWidth(width);
         }
+
         private int screenHeight;
         private int screenWidth;
 
@@ -63,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         int numColumns = 8;
         int numRows = 8;
         // Total number of cells
-        int total = numColumns*numRows;
+        int total = numColumns * numRows;
         gridLayout.setColumnCount(numColumns);
         gridLayout.setRowCount(numRows);
 
@@ -80,8 +93,8 @@ public class MainActivity extends AppCompatActivity {
             RelativeLayout templateLayout = new RelativeLayout(this);
 
             // Set which background the tile will have
-            if (c==0){
-                if (rowColorBrown){
+            if (c == 0) {
+                if (rowColorBrown) {
                     normalShape = getResources().getDrawable(R.drawable.shape_brown);
                     rowColorBrown = false;
                     columnColorBrown = false;
@@ -91,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
                     columnColorBrown = true;
                 }
             } else {
-                if (columnColorBrown){
+                if (columnColorBrown) {
                     normalShape = getResources().getDrawable(R.drawable.shape_brown);
                     columnColorBrown = false;
                 } else {
@@ -104,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Set parameters for the Relativelayout
             GridLayout.LayoutParams param = new GridLayout.LayoutParams();
-            int sideLength = screenInfoHolder.getScreenWidth()/numColumns;
+            int sideLength = screenInfoHolder.getScreenWidth() / numColumns;
             // Use same value so that it is square
             param.width = sideLength;
             param.height = sideLength;
@@ -118,21 +131,50 @@ public class MainActivity extends AppCompatActivity {
 
             // Create child
             ImageView childView = new ImageView(this);
-            childView.setImageResource(R.drawable.ic_launcher_background);
+            if (r == 1 || r == 6) {
+                childView.setImageResource(R.drawable.pawn);
+                childView.setTag(R.id.PIECE_TYPE, PAWN_TYPE);
+            } else if (c == 0 || c == 7) {
+                childView.setImageResource(R.drawable.rook);
+                childView.setTag(R.id.PIECE_TYPE, ROOK_TYPE);
+            } else if (c == 1 || c == 6) {
+                childView.setImageResource(R.drawable.knight);
+                childView.setTag(R.id.PIECE_TYPE, KNIGHT_TYPE);
+            } else if (c == 2 || c == 5) {
+                childView.setImageResource(R.drawable.bishop);
+                childView.setTag(R.id.PIECE_TYPE, BISHOP_TYPE);
+            } else if (c == 3) {
+                childView.setImageResource(R.drawable.king);
+                childView.setTag(R.id.PIECE_TYPE, KING_TYPE);
+            } else if (c == 4) {
+                childView.setImageResource(R.drawable.queen);
+                childView.setTag(R.id.PIECE_TYPE, QUEEN_TYPE);
+            }
+
+            // Save current co-ordinates of piece
+            childView.setTag(R.id.PIECE_COL_POSITION, c);
+            childView.setTag(R.id.PIECE_ROW_POSITION, r);
+
             RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(75, 75);
             layoutParams.addRule(RelativeLayout.CENTER_IN_PARENT);
             childView.setLayoutParams(layoutParams);
 
             // Add child
-            double randomNumber = Math.random();
             Set<Integer> startRows = new HashSet<>();
             // Only the first two and last two rows should have any images
             startRows.add(0);
             startRows.add(1);
             startRows.add(6);
             startRows.add(7);
-            if (startRows.contains(r)){
+            if (startRows.contains(r)) {
                 childView.setOnTouchListener(new MyTouchListener());
+                if (r == 0 || r == 1) {
+                    childView.setTag(R.id.PIECE_COLOUR, BLACK_PIECE);
+                } else {
+                    childView.setTag(R.id.PIECE_COLOUR, WHITE_PIECE);
+                    // See piece colour to white
+                    childView.setColorFilter(childView.getContext().getResources().getColor(R.color.white), PorterDuff.Mode.SRC_ATOP);
+                }
                 templateLayout.addView(childView);
             }
 

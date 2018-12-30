@@ -2,5 +2,9 @@
 <resources>
     <item type="id" name="COL_NUM" />
     <item type="id" name="ROW_NUM" />
+    <item type="id" name="PIECE_TYPE" />
+    <item type="id" name="PIECE_ROW_POSITION" />
+    <item type="id" name="PIECE_COL_POSITION" />
+    <item type="id" name="PIECE_COLOUR" />
     <item name="tableGrid" type="id"/>
 </resources>
