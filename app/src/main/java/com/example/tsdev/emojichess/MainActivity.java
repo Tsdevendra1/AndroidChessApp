@@ -10,12 +10,14 @@ import android.provider.ContactsContract;
 import android.support.constraint.ConstraintSet;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.system.ErrnoException;
 import android.util.DisplayMetrics;
 import android.view.DragEvent;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.TranslateAnimation;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -217,25 +219,265 @@ public class MainActivity extends AppCompatActivity {
                 R.drawable.shape_droptarget);
         Drawable normalShape = getResources().getDrawable(R.drawable.shape_brown);
 
-        boolean checkLegalMove(View piece, View tile) {
+        boolean checkTileHasPieceChild(ViewGroup gridLayout, int row, int col) {
+            int index = (8 * row + col);
+            ViewGroup currentTile = (ViewGroup) gridLayout.getChildAt(index);
+
+            // Need to explicitly check that the child is a chess piece and not a random view
+            for (int i = 0; i < currentTile.getChildCount(); i++) {
+                View child = currentTile.getChildAt(i);
+                int pieceColor = (int) child.getTag(R.id.PIECE_COLOUR);
+                if (pieceColor == WHITE_PIECE || pieceColor == BLACK_PIECE) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        boolean checkPathBlocked(View piece, View tile) {
+            /*
+              This function checks if the position the user moved to was blocked by a piece of the
+              same colour
+             */
+
+            boolean pathBlocked = false;
 
             // Piece info
-            int pieceType = (int) piece.getTag(R.id.PIECE_TYPE);
-            int currentPieceRow = (int) piece.getTag(R.id.PIECE_ROW_POSITION);
-            int currentPieceCol = (int) piece.getTag(R.id.PIECE_COL_POSITION);
-            int pieceColor = (int) piece.getTag(R.id.PIECE_COLOUR);
-            int pieceMovementDirection = (int) piece.getTag(R.id.MOVEMENT_DIRECTION);
+            final int pieceType = (int) piece.getTag(R.id.PIECE_TYPE);
+            final int currentPieceRow = (int) piece.getTag(R.id.PIECE_ROW_POSITION);
+            final int currentPieceCol = (int) piece.getTag(R.id.PIECE_COL_POSITION);
+            final int pieceMovementDirection = (int) piece.getTag(R.id.MOVEMENT_DIRECTION);
 
             // Tile info
-            int currentTileRow = (int) tile.getTag(R.id.ROW_NUM);
-            int currentTileCol = (int) tile.getTag(R.id.COL_NUM);
+            final int currentTileRow = (int) tile.getTag(R.id.ROW_NUM);
+            final int currentTileCol = (int) tile.getTag(R.id.COL_NUM);
+
+            // Will be used to get every square of the grid
+            ViewGroup gridLayout = findViewById(R.id.tableGrid);
+
+            // Check piece type first
+            if (pieceType == PAWN_TYPE) {
+                // Seperate logic going backwards because we have to see the numbers going the
+                // other direction
+                if (pieceMovementDirection == MOVING_FORWARD) {
+                    for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                        pathBlocked = checkTileHasPieceChild(gridLayout, row, currentPieceCol);
+                        if (pathBlocked) {
+                            return pathBlocked;
+                        }
+                    }
+                } else {
+                    for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                        pathBlocked = checkTileHasPieceChild(gridLayout, row, currentPieceCol);
+                        if (pathBlocked) {
+                            return pathBlocked;
+                        }
+                    }
+                }
+            } else if (pieceType == BISHOP_TYPE) {
+                if (currentPieceRow < currentTileRow) {
+                    // Right direction
+                    if (currentPieceCol < currentTileCol) {
+                        for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                            for (int col = currentPieceCol + 1; col < currentTileCol; col++) {
+                                if (row == currentPieceRow + Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                    if (pathBlocked) {
+                                        return pathBlocked;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Left direction
+                        for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                            for (int col = currentPieceCol - 1; col > currentTileCol; col--) {
+                                if (row == currentPieceRow + Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                    if (pathBlocked) {
+                                        return pathBlocked;
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                    // Diagonal downwards
+                } else {
+                    // Right direction
+                    if (currentPieceCol < currentTileCol) {
+                        for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                            for (int col = currentPieceCol + 1; col < currentTileCol; col++) {
+                                if (row == currentPieceRow - Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                }
+                            }
+                        }
+                        // Left direction
+                    } else {
+                        for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                            for (int col = currentPieceCol + 1; col > currentTileCol; col--) {
+                                if (row == currentPieceRow - Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } else if (pieceType == KING_TYPE)
+            // Can only ever move one position so can never be blocked
+            {
+            } else if (pieceType == QUEEN_TYPE) {
+                // Case where it moves sideways only
+                if (currentPieceRow == currentTileRow) {
+                    if (currentPieceCol < currentTileCol) {
+                        for (int col = currentPieceCol + 1; col < currentTileCol; col++) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, currentPieceRow, col);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    } else {
+                        for (int col = currentPieceCol - 1; col > currentTileCol; col--) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, currentPieceRow, col);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    }
+
+                    // Case where it moves vertically only
+                } else if (currentPieceCol == currentTileCol) {
+                    if (currentPieceRow < currentTileRow) {
+                        for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, row, currentPieceCol);
+                        }
+                    } else {
+                        for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, row, currentPieceCol);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    }
+                    // Diagonal upwards
+                } else if (currentPieceRow < currentTileRow) {
+                    // Right direction
+                    if (currentPieceCol < currentTileCol) {
+                        for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                            for (int col = currentPieceCol + 1; col < currentTileCol; col++) {
+                                if (row == currentPieceRow + Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                    if (pathBlocked) {
+                                        return pathBlocked;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Left direction
+                        for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                            for (int col = currentPieceCol - 1; col > currentTileCol; col--) {
+                                if (row == currentPieceRow + Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                    if (pathBlocked) {
+                                        return pathBlocked;
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                    // Diagonal downwards
+                } else {
+                    // Right direction
+                    if (currentPieceCol < currentTileCol) {
+                        for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                            for (int col = currentPieceCol + 1; col < currentTileCol; col++) {
+                                if (row == currentPieceRow - Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                }
+                            }
+                        }
+                        // Left direction
+                    } else {
+                        for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                            for (int col = currentPieceCol + 1; col > currentTileCol; col--) {
+                                if (row == currentPieceRow - Math.abs(currentPieceCol - col)) {
+                                    pathBlocked = checkTileHasPieceChild(gridLayout, row, col);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (pieceType == ROOK_TYPE) {
+                if (currentPieceCol == currentTileCol) {
+                    if (currentPieceRow < currentTileRow) {
+                        for (int row = currentPieceRow + 1; row < currentTileRow; row++) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, row, currentPieceCol);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    } else {
+                        for (int row = currentPieceRow - 1; row > currentTileRow; row--) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, row, currentPieceCol);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    }
+                } else if (currentTileRow == currentPieceRow) {
+                    if (currentPieceCol < currentTileCol) {
+                        for (int col = currentPieceCol + 1; col < currentTileCol; col++) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, currentPieceRow, col);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    } else {
+                        for (int col = currentPieceCol - 1; col > currentTileCol; col--) {
+                            pathBlocked = checkTileHasPieceChild(gridLayout, currentPieceRow, col);
+                            if (pathBlocked) {
+                                return pathBlocked;
+                            }
+                        }
+                    }
+
+                }
+            } else if (pieceType == KNIGHT_TYPE) {
+                // DO nothing because knight cannot be blocked
+            }
+            return pathBlocked;
+        }
+
+        boolean checkLegalMove(View piece, View tile, int childCount) {
+
+            // Piece info
+            final int pieceType = (int) piece.getTag(R.id.PIECE_TYPE);
+            final int currentPieceRow = (int) piece.getTag(R.id.PIECE_ROW_POSITION);
+            final int currentPieceCol = (int) piece.getTag(R.id.PIECE_COL_POSITION);
+            final int pieceMovementDirection = (int) piece.getTag(R.id.MOVEMENT_DIRECTION);
+
+            if (childCount != 0 && childCount != 1) {
+                throw new java.lang.Error("There should only ever be a maximum of one view on the tile");
+            }
+
+
+            // Tile info
+            final int currentTileRow = (int) tile.getTag(R.id.ROW_NUM);
+            final int currentTileCol = (int) tile.getTag(R.id.COL_NUM);
+
+
+            // Keeps track if the movement is legal
             boolean legalMove = false;
 
             if (pieceType == PAWN_TYPE) {
                 if (pieceMovementDirection == MOVING_BACKWARD) {
-                    legalMove = ((currentTileRow <= currentPieceRow && currentTileRow >= currentPieceRow - 2) && currentPieceCol == currentTileCol);
+                    legalMove = ((currentPieceRow - 2 <= currentTileRow && currentTileRow <= currentPieceRow) && currentPieceCol == currentTileCol);
                 } else {
-                    legalMove = currentTileRow >= currentPieceRow && currentTileRow <= currentPieceRow - 2;
+                    legalMove = ((currentPieceRow <= currentTileRow && currentTileRow <= currentPieceRow + 2) && currentPieceCol == currentTileCol);
                 }
             } else if (pieceType == BISHOP_TYPE) {
                 if (currentPieceCol != currentTileCol) {
@@ -246,9 +488,9 @@ public class MainActivity extends AppCompatActivity {
 
             } else if (pieceType == QUEEN_TYPE) {
                 if (currentTileCol != currentPieceCol) {
-                    legalMove = (currentTileRow == currentPieceRow ||currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
+                    legalMove = (currentTileRow == currentPieceRow || currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
                 } else if (currentTileRow != currentPieceRow) {
-                    legalMove = (currentPieceCol == currentTileCol ||currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
+                    legalMove = (currentPieceCol == currentTileCol || currentTileRow == (currentPieceRow + Math.abs(currentPieceCol - currentTileCol)) || currentTileRow == (currentPieceRow - Math.abs(currentPieceCol - currentTileCol)));
                 }
             } else if (pieceType == ROOK_TYPE) {
                 if (currentTileCol != currentPieceCol) {
@@ -267,13 +509,15 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-            // Update piece position
+            // Check if the move was blocked by another piece
             if (legalMove) {
-                piece.setTag(R.id.PIECE_ROW_POSITION, currentTileRow);
-                piece.setTag(R.id.PIECE_COL_POSITION, currentTileCol);
+                if (!checkPathBlocked(piece, tile)) {
+                    piece.setTag(R.id.PIECE_ROW_POSITION, currentTileRow);
+                    piece.setTag(R.id.PIECE_COL_POSITION, currentTileCol);
+                } else {
+                    legalMove = false;
+                }
             }
-            System.out.println(piece.getTag(R.id.PIECE_COL_POSITION));
-            System.out.println(piece.getTag(R.id.PIECE_ROW_POSITION));
             return legalMove;
         }
 
@@ -294,10 +538,24 @@ public class MainActivity extends AppCompatActivity {
                     // This is the view being dragged
                     View view = (View) event.getLocalState();
 
-                    boolean legalMove = checkLegalMove(view, v);
+                    boolean legalMove = checkLegalMove(view, v, numChildren);
+
 
                     // Shouldn't have any other children in the view it is being dropped into
                     if (numChildren == 0 && legalMove) {
+
+                        final int[] locationArray = new int[2];
+                        v.getLocationOnScreen(locationArray);
+                        System.out.println(locationArray);
+
+//                        TranslateAnimation animate = new TranslateAnimation(
+//                                100,                 // fromXDelta
+//                                50,                 // toXDelta
+//                                10,  // fromYDelta
+//                                100);
+//                        animate.setDuration(900);
+//                        animate.setFillAfter(true);
+//                        v.startAnimation(animate);
 
                         // Need to get the parent of the view so we can remove it from that position
                         ViewGroup owner = (ViewGroup) view.getParent();
