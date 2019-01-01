@@ -7,5 +7,6 @@
     <item type="id" name="PIECE_COL_POSITION" />
     <item type="id" name="PIECE_COLOUR" />
     <item type="id" name="MOVEMENT_DIRECTION" />
+    <item type="id" name="BACKGROUND_COLOUR" />
     <item name="tableGrid" type="id"/>
 </resources>
